@@ -1,18 +1,21 @@
 package org.dbpedia.extraction.dataparser
 
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
 import org.dbpedia.extraction.util.WikiUtil
 import org.dbpedia.extraction.wikiparser._
+
 import scala.util.matching.Regex.Match
 
 /**
  * Parses a human-readable character string from a node. 
  */
-object StringParser extends DataParser
+@SoftwareAgentAnnotation(classOf[StringParser], AnnotationType.Parser)
+class StringParser extends DataParser[String]
 {
     private val smallTagRegex = """<small[^>]*>\(?(.*?)\)?<\/small>""".r
     private val tagRegex = """\<.*?\>""".r
 
-    override def parse(node : Node) : Option[ParseResult[String]] =
+    private[dataparser] override def parse(node : Node) : Option[ParseResult[String]] =
     {
         //Build text from node
         node match {
@@ -28,7 +31,7 @@ object StringParser extends DataParser
         nodeToString(node, sb)
 
         //Clean text
-        val text = postProcess(sb.toString())
+        val text = postProcess(sb.toString)
         
         if(text.isEmpty)
         {
@@ -40,6 +43,7 @@ object StringParser extends DataParser
         }
     }
 
+    //FIXME this cleaning takes a lot of computing power
     // Replace text in <small></small> tags with an "equivalent" string representation
     // Simply extracting the content puts this data at the same level as other text appearing
     // in the node, which might not be the editor's semantics
@@ -49,6 +53,7 @@ object StringParser extends DataParser
         text = tagRegex.replaceAllIn(text, "") //strip tags
         text = WikiUtil.removeWikiEmphasis(text)
         text = text.replace("&nbsp;", " ")//TODO decode all html entities here
+        text = text.replaceAll("\\s+", " ")
         text.trim
     }
   
@@ -56,9 +61,15 @@ object StringParser extends DataParser
     {
         node match
         {
-            case TextNode(text, _, _) => sb.append(text)
+            case TextNode(text, _, _) => sb.append(" " + text)
             case _ : TemplateNode | _ : TableNode => //ignore
             case _ => node.children.foreach(child => nodeToString(child, sb))
         }
     }
+}
+
+
+object StringParser extends DataParser[String]{
+    private val parser = new StringParser()
+    override private[dataparser] def parse(node: Node) = parser.parse(node)
 }

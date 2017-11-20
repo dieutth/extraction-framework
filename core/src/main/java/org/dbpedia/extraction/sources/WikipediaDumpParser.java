@@ -1,7 +1,8 @@
 package org.dbpedia.extraction.sources;
 
+import org.dbpedia.extraction.config.DefaultEntry;
+import org.dbpedia.extraction.config.RecordCause;
 import org.dbpedia.extraction.util.Language;
-import org.dbpedia.extraction.util.RecordSeverity;
 import org.dbpedia.extraction.wikiparser.Namespace;
 import org.dbpedia.extraction.wikiparser.WikiPage;
 import org.dbpedia.extraction.wikiparser.WikiTitle;
@@ -229,7 +230,7 @@ public class WikipediaDumpParser
       }
       catch (Exception e)
       {
-          records.add(new Tuple3<String, Throwable, Enumeration.Value>("Error parsing page title " + titleStr, e, RecordSeverity.Warning()));
+          records.add(new Tuple3<String, Throwable, Enumeration.Value>("Error parsing page title " + titleStr, e, RecordCause.Warning()));
           //logger.log(Level.WARNING, _language.wikiCode() + ": error parsing page title ["+titleString+"]: "+Exceptions.toString(e, 200));
       }
 
@@ -241,13 +242,13 @@ public class WikipediaDumpParser
       try
       {
         Namespace expNs = new Namespace(nsCode, Namespaces.names(_language).get(nsCode).get(), false);
-        records.add(new Tuple3<String, Throwable, Enumeration.Value>("Error parsing title: found namespace " + title.namespace() + ", expected " + expNs + " in title " + titleStr, null, RecordSeverity.Info()));
+        records.add(new Tuple3<String, Throwable, Enumeration.Value>("Error parsing title: found namespace " + title.namespace() + ", expected " + expNs + " in title " + titleStr, null, RecordCause.Info()));
         //logger.log(Level.WARNING, _language.wikiCode() + ": Error parsing title: found namespace " + title.namespace() + ", expected " + expNs + " in title " + titleStr);
         title.otherNamespace_$eq(expNs);
       }
       catch (NoSuchElementException e)
       {
-        records.add(new Tuple3<String, Throwable, Enumeration.Value>(String.format("Error parsing title: found namespace %s, title %s , key %s", title.namespace(),titleStr, nsCode), e, RecordSeverity.Warning()));
+        records.add(new Tuple3<String, Throwable, Enumeration.Value>(String.format("Error parsing title: found namespace %s, title %s , key %s", title.namespace(),titleStr, nsCode), e, RecordCause.Warning()));
         //logger.log(Level.WARNING, String.format(_language.wikiCode() + ": Error parsing title: found namespace %s, title %s , key %s", title.namespace(),titleStr, nsCode));
         skipTitle();
         return;
@@ -263,26 +264,26 @@ public class WikipediaDumpParser
 
     //Read page
     WikiPage page = null;
-    WikiTitle redirect = null;
+    //WikiTitle redirect = null;
     while (nextTag() == START_ELEMENT)
     {
       if (isStartElement(REDIRECT_ELEM))
       {
         String titleString = _reader.getAttributeValue(null, TITLE_ELEM);
-        try
+/*        try
         {
           redirect = parseTitle(titleString, null);
         }
         catch (Exception e)
         {
           records.add(new Tuple3<String, Throwable, Enumeration.Value>("Error parsing page title " + titleString, e, RecordSeverity.Warning()));
-        }
+        }*/
         nextTag();
         // now at </redirect>
       }
       else if (isStartElement(REVISION_ELEM))
       {
-        page = readRevision(title, redirect, pageId);
+        page = readRevision(title, pageId);
         // now at </revision>
       }
       else
@@ -295,7 +296,7 @@ public class WikipediaDumpParser
     if (page != null)
     {
       for(Tuple3<String, Throwable, scala.Enumeration.Value> record : records){
-        page.addExtractionRecord(record._1(), record._2(), record._3());
+        page.addExtractionRecord(new DefaultEntry(record._1(), RecordCause.Warning(), record._2(), null));
       }
       try
       {
@@ -306,7 +307,7 @@ public class WikipediaDumpParser
         // emulate Scala exception handling. Ugly...
         if (e instanceof ControlThrowable) throw Exceptions.unchecked(e);
         if (e instanceof InterruptedException) throw (InterruptedException)e;
-        else page.addExtractionRecord("Could not process page: " + page.title().encoded(), e, RecordSeverity.Warning());
+        else page.addExtractionRecord(new DefaultEntry("Could not process page: " + page.title().encoded(), RecordCause.Warning(), e, null));
       }
     }
     requireEndElement(PAGE_ELEM);
@@ -316,7 +317,7 @@ public class WikipediaDumpParser
     while(! isEndElement(PAGE_ELEM)) _reader.next();
   }
 
-  private WikiPage readRevision(WikiTitle title, WikiTitle redirect, String pageId)
+  private WikiPage readRevision(WikiTitle title, String pageId)
   throws XMLStreamException
   {
     String text = null;
@@ -399,7 +400,7 @@ public class WikipediaDumpParser
     requireEndElement(REVISION_ELEM);
     // now at </revision>
     
-    return new WikiPage(title, redirect, pageId, revisionId, timestamp, contributorID, contributorName, text, format);
+    return new WikiPage(title, pageId, revisionId, timestamp, contributorID, contributorName, text, format);
   }
   
   /* Methods for low-level work. Ideally, only these methods would access _reader while the

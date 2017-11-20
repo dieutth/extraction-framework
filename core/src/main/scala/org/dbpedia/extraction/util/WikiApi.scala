@@ -120,7 +120,8 @@ class WikiApi(url: URL, language: Language)
         {
             for(group <- ids.grouped(pageDownloadLimit))
             {
-                val response = query("?action=query&continue=&format=xml&prop=revisions|info&"+param+"=" + group.mkString("|") + "&rvprop=ids|content|timestamp|user|userid")
+                val q ="?action=query&continue=&format=xml&prop=revisions|info&"+param+"=" + group.mkString("|") + "&rvprop=ids|content|timestamp|user|userid"
+                val response = query(q)
                 processPages(response, proc)
             }
         }
@@ -157,7 +158,7 @@ class WikiApi(url: URL, language: Language)
             proc(
                 new WikiPage(
                     title           = WikiTitle.parse((page \ "@title").head.text, language),
-                    redirect        = null, //WikiTitle.parse((page \ "redirect" \ "@title").text, language),
+                    //redirect        = null, //WikiTitle.parse((page \ "redirect" \ "@title").text, language),
                     id              = (page \ "@pageid").head.text,
                     revision        = (rev \ "@revid").head.text,
                     timestamp       = (rev \ "@timestamp").head.text,

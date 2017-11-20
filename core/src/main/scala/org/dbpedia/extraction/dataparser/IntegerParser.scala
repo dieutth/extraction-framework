@@ -1,19 +1,24 @@
 package org.dbpedia.extraction.dataparser
 
-import java.util.logging.{Logger,Level}
+import java.util.logging.{Level, Logger}
+
 import org.dbpedia.extraction.wikiparser.Node
 import java.text.ParseException
+
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
 import org.dbpedia.extraction.util.Language
 import org.dbpedia.extraction.config.dataparser.DataParserConfig
+
 import scala.language.reflectiveCalls
 
 /**
  * Parses integer numbers.
  */
+@SoftwareAgentAnnotation(classOf[IntegerParser], AnnotationType.Parser)
 class IntegerParser( context : { def language : Language } ,
                      strict : Boolean = false,
                      multiplicationFactor : Double = 1.0,
-                     validRange : Double => Boolean = i => true) extends DataParser
+                     validRange : Double => Boolean = i => true) extends DataParser[Long]
 {
     private val parserUtils = new ParserUtils(context)
 
@@ -28,7 +33,7 @@ class IntegerParser( context : { def language : Language } ,
     // we allow digits, minus, comma, dot and space in numbers
     private val IntegerRegex = """\D*?(?:\D\d+\s+)?(-?[0-9,\. ]+).*""".r
 
-    override def parse(node : Node) : Option[ParseResult[Long]] =
+    private[dataparser] override def parse(node : Node) : Option[ParseResult[Long]] =
     {
         for( text <- StringParser.parse(node);
              convertedText = parserUtils.convertLargeNumbers(text.value);

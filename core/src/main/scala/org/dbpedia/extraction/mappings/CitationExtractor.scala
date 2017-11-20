@@ -1,5 +1,7 @@
 package org.dbpedia.extraction.mappings
 
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
+import org.dbpedia.extraction.config.ExtractionRecorder
 import org.dbpedia.extraction.config.dataparser.DataParserConfig
 import org.dbpedia.extraction.config.mappings.InfoboxExtractorConfig
 import org.dbpedia.extraction.config.provenance.DBpediaDatasets
@@ -16,17 +18,20 @@ import org.dbpedia.iri.{IRI, UriUtils}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.language.reflectiveCalls
+import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
 /**
  * This extractor extract citation data from articles
  * to boostrap this it is based on the infoboxExtractor
  */
+@SoftwareAgentAnnotation(classOf[CitationExtractor], AnnotationType.Extractor)
 class CitationExtractor(
   context : {
     def ontology : Ontology
     def language : Language
-    def redirects : Redirects 
+    def redirects : Redirects
+      def recorder[T: ClassTag] : ExtractionRecorder[T]
   } 
 ) 
 extends WikiPageExtractor
@@ -116,7 +121,7 @@ extends WikiPageExtractor
         // with this hack we create a wikiPage close and remove all "<ref" from the source and then try to reparse the page
         val pageWithoutRefs = new WikiPage(
             title = page.title,
-            redirect = page.redirect,
+            //redirect = page.redirect,
             id = page.id,
             revision = page.revision,
             timestamp = page.timestamp,
@@ -127,7 +132,7 @@ extends WikiPageExtractor
         )
 
         /** Retrieve all templates on the page which are not ignored */
-        for {node <- SimpleWikiParser.apply(pageWithoutRefs)
+        for {node <- SimpleWikiParser.apply(pageWithoutRefs, context.redirects)
              template <- ExtractorUtils.collectTemplatesFromNodeTransitive(node)
              resolvedTitle = context.redirects.resolve(template.title).decoded.toLowerCase
              if citationTemplatesRegex.exists(regex => regex.findFirstMatchIn(resolvedTitle).isDefined)
@@ -175,19 +180,19 @@ extends WikiPageExtractor
             case links if links.nonEmpty => return links
             case _ =>
         }
-        StringParser.parse(node).map(value => ParseResult(value.value, None, Some(xsdStringDt))).toList
+        StringParser.parseWithProvenance(node).map(value => ParseResult(value.value, None, Some(xsdStringDt))).toList
     }
 
     private def extractUnitValue(node : PropertyNode) : Option[ParseResult[String]] =
     {
         val unitValues =
         for (unitValueParser <- unitValueParsers;
-             pr <- unitValueParser.parse(node) )
+             pr <- unitValueParser.parseWithProvenance(node) )
              yield pr
 
         if (unitValues.size > 1)
         {
-            StringParser.parse(node).map(value => ParseResult(value.value, None, Some(xsdStringDt)))
+            StringParser.parseWithProvenance(node).map(value => ParseResult(value.value, None, Some(xsdStringDt)))
         }
         else if (unitValues.size == 1)
         {
@@ -211,16 +216,16 @@ extends WikiPageExtractor
 
     private def extractRankNumber(node : PropertyNode) : Option[ParseResult[String]] =
     {
-        StringParser.parse(node) match
+        StringParser.parseWithProvenance(node) match
         {
-            case Some(RankRegex(number)) => Some(ParseResult(number, None, Some(new Datatype("xsd:integer"))))
+            case Some(ParseResult(RankRegex(number), _, _, _)) => Some(ParseResult(number, None, Some(new Datatype("xsd:integer"))))
             case _ => None
         }
     }
     
     private def extractSingleCoordinate(node : PropertyNode) : Option[ParseResult[String]] =
     {
-        singleGeoCoordinateParser.parse(node).foreach(value => return Some(ParseResult(value.value.toDouble.toString, None, Some(new Datatype("xsd:double")))))
+        singleGeoCoordinateParser.parseWithProvenance(node).foreach(value => return Some(ParseResult(value.value.toDouble.toString, None, Some(new Datatype("xsd:double")))))
         None
     }
 
@@ -244,7 +249,7 @@ extends WikiPageExtractor
     private def extractDate(node : PropertyNode) : Option[ParseResult[String]] =
     {
         for (dateTimeParser <- dateTimeParsers;
-             date <- dateTimeParser.parse(node))
+             date <- dateTimeParser.parseWithProvenance(node))
         {
             return Some(ParseResult(date.value.toString, None, Some(date.value.datatype)))
         }
@@ -255,14 +260,14 @@ extends WikiPageExtractor
     {
         val splitNodes = NodeUtil.splitPropertyNode(node, """\s*\W+\s*""")
 
-        splitNodes.flatMap(splitNode => objectParser.parse(splitNode)) match
+        splitNodes.flatMap(splitNode => objectParser.parseWithProvenance(splitNode)) match
         {
             // TODO: explain why we check links.size == splitNodes.size
             case links if links.size == splitNodes.size => return links
             case _ => List.empty
         }
         
-        splitNodes.flatMap(splitNode => linkParser.parse(splitNode)) match
+        splitNodes.flatMap(splitNode => linkParser.parseWithProvenance(splitNode)) match
         {
             // TODO: explain why we check links.size == splitNodes.size
             case links if links.size == splitNodes.size => links.map(x => UriUtils.cleanLink(x.value)).collect{case Some(link) => ParseResult(link)}
@@ -340,7 +345,7 @@ extends WikiPageExtractor
 
     private def getPropertyValueAsString(propertyNode: PropertyNode): Option[String] =
     {
-        StringParser.parse(propertyNode) match {
+        StringParser.parseWithProvenance(propertyNode) match {
             case Some(pr) if pr.value.trim.nonEmpty => Some(pr.value)
             case _ => None
         }
@@ -348,12 +353,12 @@ extends WikiPageExtractor
 
     private def getPropertyValueAsLink(propertyNode: PropertyNode): Option[IRI] =
     {
-        StringParser.parse(propertyNode) match {
+        StringParser.parseWithProvenance(propertyNode) match {
             case Some(pr) if pr.value.trim.nonEmpty => Some(pr.value)
             case _ => None
         }
 
-        linkParser.parse(propertyNode) match {
+        linkParser.parseWithProvenance(propertyNode) match {
             case Some(pr) => Some(pr.value)
             case _ => UriUtils.createURI(propertyNode.children.flatMap(_.toPlainText).mkString.trim) match{
                 case Success(iri) => if (iri.isAbsolute)

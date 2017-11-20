@@ -1,5 +1,6 @@
 package org.dbpedia.extraction.wikiparser
 
+import org.dbpedia.extraction.config.provenance.{NodeRecord, ProvenanceRecord}
 import org.dbpedia.extraction.config.transform.TemplateTransformConfig
 
 /**
@@ -14,9 +15,10 @@ case class TemplateNode (
     override val children : List[PropertyNode],
     override val line : Int,
     titleParsed : List[Node] = List())
-  extends Node(children, line)
+  extends Node
 {
-    private val propertyMap : Map[String, PropertyNode] = Map.empty ++ (for(property <- children) yield (property.key, property))
+    private val propertyMap : Map[String, PropertyNode] = Map.empty ++
+          (for(property <- children) yield (property.key, property))
     
     /**
      * Retrieves a property by its key.
@@ -37,6 +39,8 @@ case class TemplateNode (
     // templates are skipped for plain text
     def toPlainText = ""
 
+    override def getNodeRecord: NodeRecord = this.root.getNodeRecord.copy(Some(this.line))
+
     override def equals(obj: scala.Any): Boolean = obj match {
 
         case otherTemplateNode : TemplateNode =>
@@ -55,5 +59,9 @@ object TemplateNode {
     def transform(node: TemplateNode) : List[Node] = {
 
       TemplateTransformConfig(node, node.title.language)
+    }
+
+    def transformAll(node: Node) : Unit = {
+
     }
 }

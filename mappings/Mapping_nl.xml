@@ -1552,7 +1552,7 @@
 	{{PropertyMapping | templateProperty = zilver | ontologyProperty = numberOfSilverMedalsWon }}
 	{{PropertyMapping | templateProperty = brons | ontologyProperty = numberOfBronzeMedalsWon }}
 	{{PropertyMapping | templateProperty = rang | ontologyProperty = rankInFinalMedalCount }}
-}}</text></revision></page><page><title>Mapping nl:Infobox Russische stad</title><ns>216</ns><id>6697</id><revision><id>50357</id><timestamp>2016-02-14T19:50:59Z</timestamp><text>{{TemplateMapping
+}}</text></revision></page><page><title>Mapping nl:Infobox Russische stad</title><ns>216</ns><id>6697</id><revision><id>52557</id><timestamp>2017-10-26T10:34:15Z</timestamp><text>{{TemplateMapping
 | mapToClass = Settlement
 | mappings = 
 
@@ -1585,7 +1585,7 @@
         {{PropertyMapping | templateProperty = stadsdag | ontologyProperty = day }}
         {{PropertyMapping | templateProperty = jurisdictie | ontologyProperty = jurisdiction }}
         {{PropertyMapping | templateProperty = district | ontologyProperty = district }}
-        {{PropertyMapping | templateProperty = okatocode | ontologyProperty = codeLandRegistry }}
+        {{PropertyMapping | templateProperty = okatocode | ontologyProperty = registry }}
         {{PropertyMapping | templateProperty = gemeentevorm | ontologyProperty = governingBody }}
         {{PropertyMapping | templateProperty = soort | ontologyProperty = cityType }}
         {{PropertyMapping | templateProperty = indeling | ontologyProperty = subdivisions }}
@@ -5482,7 +5482,7 @@ bronmodel
 	                        | latitudeMinutes = lat_min | latitudeSeconds = lat_sec
                                 | latitudeDirection = lat_dir | longitudeDirection = lon_dir  }}  
 
-}}</text></revision></page><page><title>Mapping nl:Infobox geneesmiddel</title><ns>216</ns><id>6526</id><revision><id>51340</id><timestamp>2016-06-30T11:32:39Z</timestamp><text>{{TemplateMapping
+}}</text></revision></page><page><title>Mapping nl:Infobox geneesmiddel</title><ns>216</ns><id>6526</id><revision><id>52415</id><timestamp>2017-10-15T14:46:43Z</timestamp><text>{{TemplateMapping
 | mapToClass = Drug
 | mappings = 
 	{{PropertyMapping | templateProperty = naam               | ontologyProperty = name }}
@@ -5491,9 +5491,12 @@ bronmodel
 	{{PropertyMapping | templateProperty = afbeelding2        | ontologyProperty = picture }}
 	{{PropertyMapping | templateProperty = IUPAC_naam         | ontologyProperty = iupacName }}
 	{{PropertyMapping | templateProperty = IUPAC              | ontologyProperty = iupacName }}
-	{{PropertyMapping | templateProperty = ATC_prefix         | ontologyProperty = atcPrefix }}
-	{{PropertyMapping | templateProperty = ATC_suffix         | ontologyProperty = atcSuffix }}
-	{{PropertyMapping | templateProperty = ATC_supplemental   | ontologyProperty = atcSupplemental }}
+	{{CombineSimpleMapping
+	| templateProperty1 = ATC_prefix
+	| templateProperty2 = ATC_suffix
+	| ontologyProperty = atcCode
+	}}
+	{{PropertyMapping | templateProperty = ATC_supplemental   | ontologyProperty = atcCode }}
 	{{PropertyMapping | templateProperty = DrugBank           | ontologyProperty = drugbank }}
         {{PropertyMapping | templateProperty = PubChem            | ontologyProperty = pubchem }}
 	{{PropertyMapping | templateProperty = kleur              | ontologyProperty = colour }}
@@ -11084,7 +11087,7 @@ bronmodel
 
         {{PropertyMapping | templateProperty = website | ontologyProperty = foaf:homepage }}
 
-}}</text></revision></page><page><title>Mapping nl:Infobox politieke partij</title><ns>216</ns><id>6704</id><revision><id>29105</id><timestamp>2013-12-19T16:36:02Z</timestamp><text>{{TemplateMapping
+}}</text></revision></page><page><title>Mapping nl:Infobox politieke partij</title><ns>216</ns><id>6704</id><revision><id>52506</id><timestamp>2017-10-17T22:52:26Z</timestamp><text>{{TemplateMapping
 | mapToClass = PoliticalParty
 | mappings =
 	{{ PropertyMapping | templateProperty = naam | ontologyProperty = name }}
@@ -11103,7 +11106,7 @@ bronmodel
 	{{ PropertyMapping | templateProperty = euroorganisatie  | ontologyProperty = europeanAffiliation }}
 	{{ PropertyMapping | templateProperty = internationaal  | ontologyProperty = internationalAffiliation }}
 	{{ PropertyMapping | templateProperty = splitsing | ontologyProperty = splitFromParty }}
-	{{ PropertyMapping | templateProperty = opgegaan | ontologyProperty = mergedIntoParty }}
+	{{ PropertyMapping | templateProperty = opgegaan | ontologyProperty = mergedWith }}
 	{{ PropertyMapping | templateProperty = opheffing | ontologyProperty = extinctionDate }}
 	{{ PropertyMapping | templateProperty = opheffing | ontologyProperty = extinctionYear }}
 	{{ PropertyMapping | templateProperty = jongeren | ontologyProperty = youthWing }}
@@ -11139,7 +11142,7 @@ bronmodel
 	{{ PropertyMapping | templateProperty = krant | ontologyProperty = mainOrgan }}
 	{{ PropertyMapping | templateProperty = voorganger | ontologyProperty = predecessor }}
 
-}}</text></revision></page><page><title>Mapping nl:Infobox politieke partij Nederland</title><ns>216</ns><id>9474</id><revision><id>35233</id><timestamp>2014-06-11T16:59:06Z</timestamp><text>{{TemplateMapping
+}}</text></revision></page><page><title>Mapping nl:Infobox politieke partij Nederland</title><ns>216</ns><id>9474</id><revision><id>52507</id><timestamp>2017-10-17T22:52:45Z</timestamp><text>{{TemplateMapping
 | mapToClass = PoliticalParty
 | mappings =
 	{{ ConstantMapping | ontologyProperty = country | value = Nederland }}
@@ -11157,7 +11160,7 @@ bronmodel
 	{{ PropertyMapping | templateProperty = euroorganisatie  | ontologyProperty = europeanAffiliation }}
 	{{ PropertyMapping | templateProperty = internationaal  | ontologyProperty = internationalAffiliation }}
 	{{ PropertyMapping | templateProperty = splitsing | ontologyProperty = splitFromParty }}
-	{{ PropertyMapping | templateProperty = opgegaan | ontologyProperty = mergedIntoParty }}
+	{{ PropertyMapping | templateProperty = opgegaan | ontologyProperty = mergedWith }}
 	{{ PropertyMapping | templateProperty = opheffing | ontologyProperty = extinctionDate }}
 	{{ PropertyMapping | templateProperty = opheffing | ontologyProperty = extinctionYear }}
 	{{ PropertyMapping | templateProperty = jongeren | ontologyProperty = youthWing }}

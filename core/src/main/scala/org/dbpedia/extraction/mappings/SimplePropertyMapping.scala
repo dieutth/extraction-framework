@@ -1,19 +1,23 @@
 package org.dbpedia.extraction.mappings
 
-import java.util.logging.Logger
-
-import org.dbpedia.extraction.config.provenance.DBpediaDatasets
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
+import org.dbpedia.extraction.config.{ExtractionRecorder, RecordCause, RecordEntry}
+import org.dbpedia.extraction.config.provenance.{DBpediaDatasets, DBpediaMetadata, ExtractorRecord, ProvenanceRecord}
 import org.dbpedia.extraction.ontology.datatypes._
 import org.dbpedia.extraction.dataparser._
 import org.dbpedia.extraction.transform.Quad
 import org.dbpedia.extraction.util.{ExtractorUtils, Language}
 import org.dbpedia.extraction.ontology._
-import org.dbpedia.extraction.wikiparser.TemplateNode
-import org.dbpedia.extraction.ontology.{OntologyDatatypeProperty,OntologyClass,OntologyProperty,DBpediaNamespace}
+import org.dbpedia.extraction.wikiparser.{Node, TemplateNode}
+import org.dbpedia.extraction.ontology.{DBpediaNamespace, OntologyClass, OntologyDatatypeProperty, OntologyProperty}
+
 import scala.collection.mutable.ArrayBuffer
 import scala.language.reflectiveCalls
+import scala.reflect.ClassTag
 
+@SoftwareAgentAnnotation(classOf[SimplePropertyMapping], AnnotationType.Extractor)
 class SimplePropertyMapping (
+  val templateName: String,
   val templateProperty : String, // IntermediateNodeMapping and CreateMappingStats requires this to be public
   val ontologyProperty : OntologyProperty,
   val select : String,  // rml mappings require this to be public (e.g. ModelMapper)
@@ -27,11 +31,14 @@ class SimplePropertyMapping (
     def ontology : Ontology
     def redirects : Redirects  // redirects required by DateTimeParser and UnitValueParser
     def language : Language
+    def recorder[T: ClassTag] : ExtractionRecorder[T]
   }
 )
 extends PropertyMapping
 {
-    val selector: List[_] => List[_] =
+    private val recorder = context.recorder[Node]
+
+    val selector: List[ParseResult[_]] => List[ParseResult[_]] =
         select match {
             case "first" => _.take(1)
             case "last" => _.reverse.take(1)
@@ -74,17 +81,17 @@ extends PropertyMapping
             //Check if unit is compatible to the range of the ontology property
             (unit, datatypeProperty.range) match
             {
-                case (dt1 : UnitDatatype, dt2 : UnitDatatype) => require(dt1.dimension == dt2.dimension,
-                    "Unit must conform to the dimension of the range of the ontology property")
+                case (dt1 : UnitDatatype, dt2 : UnitDatatype) =>
+                  require(dt1.dimension == dt2.dimension, "Unit must conform to the dimension of the range of the ontology property")
 
-                case (dt1 : UnitDatatype, dt2 : DimensionDatatype) => require(dt1.dimension == dt2,
-                    "Unit must conform to the dimension of the range of the ontology property")
+                case (dt1 : UnitDatatype, dt2 : DimensionDatatype) =>
+                  require(dt1.dimension == dt2, "Unit must conform to the dimension of the range of the ontology property")
 
-                case (dt1 : DimensionDatatype, dt2 : UnitDatatype) => require(dt1 == dt2.dimension,
-                    "The dimension of unit must match the range of the ontology property")
+                case (dt1 : DimensionDatatype, dt2 : UnitDatatype) =>
+                  require(dt1 == dt2.dimension, "The dimension of unit must match the range of the ontology property")
 
-                case (dt1 : DimensionDatatype, dt2 : DimensionDatatype) => require(dt1 == dt2,
-                    "Unit must match the range of the ontology property")
+                case (dt1 : DimensionDatatype, dt2 : DimensionDatatype) =>
+                  require(dt1 == dt2,"Unit must match the range of the ontology property")
 
                 case _ if unit != null => require(unit == ontologyProperty.range, "Unit must be compatible to the range of the ontology property")
                 case _ =>
@@ -103,7 +110,7 @@ extends PropertyMapping
         "Language can only be specified for rdf:langString datatype properties")
     }
     
-    private val parser : DataParser = ontologyProperty.range match
+    private val parser : DataParser[_] = ontologyProperty.range match
     {
         //TODO
         case c : OntologyClass =>
@@ -141,13 +148,13 @@ extends PropertyMapping
               new LinkParser(false)
             case "xsd:date" =>
               checkMultiplicationFactor("xsd:date")
-              new DateTimeParser(context, dt)
+              new DateTimeParser(context, dt, strict = false, tryMinorTypes = true)
             case "xsd:gYear" =>
               checkMultiplicationFactor("xsd:gYear")
               new DateTimeParser(context, dt)
             case "xsd:gYearMonth" =>
               checkMultiplicationFactor("xsd:gYearMonth")
-              new DateTimeParser(context, dt)
+              new DateTimeParser(context, dt, strict = false, tryMinorTypes = true)
             case "xsd:gMonthDay" =>
               checkMultiplicationFactor("xsd:gMonthDay")
               new DateTimeParser(context, dt)
@@ -180,10 +187,7 @@ extends PropertyMapping
               parser.parsePropertyNode(propertyNode, !ontologyProperty.isFunctional, transform, valueTransformer)
             } catch {
               case e: Throwable =>
-                Logger
-                  .getLogger(this.getClass.getName)
-                  .warning("Failed to parse '" + propertyNode.key + "' from template '" + node.title.decoded
-                    + "' in page '" + node.root.title.decoded + " reason: " + e.toString)
+                //recorder.record(new RecordEntry[_](node, RecordCause.Warning, node.root.title.language, "Failed to parse '" + propertyNode.key + "' from template '" + node.title.decoded + "' in page '" + node.root.title.decoded, e))
                 List()
             }
 
@@ -223,13 +227,32 @@ extends PropertyMapping
                     "&plainTextSize=" + propertyNodeTextLength +
                     "&valueSize=" + resultLength +
                     (if (isHashIri) "&objectHasFragment=" else "")
-                val g = parseResult match
-                {
-                    case pr: ParseResult[Double] if pr.unit.nonEmpty => writeUnitValue(node, pr, subjectUri, propertyNode.sourceIri+resultLengthPercentageTxt)
-                    case pr: ParseResult[_] => writeValue(pr, subjectUri, propertyNode.sourceIri+resultLengthPercentageTxt)
+                val g = parseResult match {
+                    case ParseResult(_: Double, _, u, _) if u.nonEmpty =>
+                      writeUnitValue(node, parseResult.asInstanceOf[ParseResult[Double]], subjectUri, propertyNode.sourceIri+resultLengthPercentageTxt)
+                    case pr: ParseResult[_] =>
+                      writeValue(pr, subjectUri, propertyNode.sourceIri+resultLengthPercentageTxt)
                 }
 
-                graph ++= g
+              val annotation = SoftwareAgentAnnotation.getAnnotationIri(this.getClass)
+
+              g.foreach(q => q.setProvenanceRecord(new DBpediaMetadata(
+                propertyNode.getNodeRecord,
+                if(q.dataset != null) Seq(RdfNamespace.fullUri(DBpediaNamespace.DATASET, q.dataset)) else Seq(),
+                Some(ExtractorRecord(
+                  annotation.toString,
+                  parseResult.provenance.getOrElse(throw new IllegalArgumentException("No ParserRecord found.")),
+                  Some(parseResults.size),
+                  Some(templateName),
+                  Some(templateProperty),
+                  Some("Mapping " + language.wikiCode + ":" + templateName),
+                  Node.collectTemplates(propertyNode, Set.empty).map(x => x.title.decoded)
+                )),
+                None,
+                Seq.empty
+              )))
+
+              graph ++= g
             }
         }
         
@@ -238,16 +261,13 @@ extends PropertyMapping
 
     private def writeUnitValue(node : TemplateNode, pr: ParseResult[Double], subjectUri : String, sourceUri : String): Seq[Quad] =
     {
-        //TODO better handling of inconvertible units
-        if(unit.isInstanceOf[InconvertibleUnitDatatype])
-        {
-            val quad = new Quad(language, DBpediaDatasets.OntologyPropertiesLiterals, subjectUri, ontologyProperty, pr.value.toString, sourceUri, unit)
-            return Seq(quad)
-        }
-
         //Write generic property
         val stdValue = pr.unit match{
-          case Some(u) if u.isInstanceOf[UnitDatatype] => u.asInstanceOf[UnitDatatype].toStandardUnit(pr.value)
+          case Some(u) if u.isInstanceOf[InconvertibleUnitDatatype] => {
+            return Seq(new Quad(language, DBpediaDatasets.OntologyPropertiesLiterals, subjectUri, ontologyProperty, pr.value.toString, sourceUri, unit))
+          }
+          case Some(u) if u.isInstanceOf[UnitDatatype] =>
+            u.asInstanceOf[UnitDatatype].toStandardUnit(pr.value)
           case None => pr.value  //should not happen
         }
         
@@ -256,7 +276,6 @@ extends PropertyMapping
         graph += new Quad(language, DBpediaDatasets.OntologyPropertiesLiterals, subjectUri, ontologyProperty, stdValue.toString, sourceUri, new Datatype("xsd:double"))
         
         // Write specific properties
-        // FIXME: copy-and-paste in CalculateMapping
         for(templateClass <- node.getAnnotation(TemplateMapping.CLASS_ANNOTATION);
             currentClass <- templateClass.relatedClasses)
         {
@@ -264,8 +283,7 @@ extends PropertyMapping
             {
                  val outputValue = specificPropertyUnit.fromStandardUnit(stdValue)
                  val propertyUri = DBpediaNamespace.ONTOLOGY.append(currentClass.name+'/'+ontologyProperty.name)
-                 val quad = new Quad(language, DBpediaDatasets.SpecificProperties, subjectUri,
-                                     propertyUri, outputValue.toString, sourceUri, specificPropertyUnit)
+                 val quad = new Quad(language, DBpediaDatasets.SpecificProperties, subjectUri, propertyUri, outputValue.toString, sourceUri, specificPropertyUnit)
                  graph += quad
             }
         }
@@ -283,4 +301,10 @@ extends PropertyMapping
 
         Seq(new Quad(pr.lang.getOrElse(language), mapDataset, subjectUri, ontologyProperty, pr.value.toString, sourceUri, datatype))
     }
+
+  /**
+    * provides a summary about this extractor used for provenance
+    *
+    * @return
+    */
 }

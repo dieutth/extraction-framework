@@ -74,7 +74,22 @@ object IOUtils {
     val reader = this.reader(file)
     try {
       for (line <- reader) {
-        proc(line)
+          proc(line)
+      }
+    }
+    finally reader.close()
+  }
+
+  /**
+    * open input stream, wrap in unzipper stream if file suffix indicates compressed file,
+    * wrap in reader, wrap in buffered reader, process all lines. The last value passed to
+    * proc will be null.
+    */
+  def readLines(stream: InputStream, charset: Charset)(proc: String => Unit): Unit = {
+    val reader = new InputStreamReader(stream, charset)
+    try {
+      for (line <- reader) {
+          proc(line)
       }
     }
     finally reader.close()

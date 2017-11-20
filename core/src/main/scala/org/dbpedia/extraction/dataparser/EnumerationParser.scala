@@ -1,14 +1,16 @@
 package org.dbpedia.extraction.dataparser
 
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
 import org.dbpedia.extraction.wikiparser.{Node, TextNode}
-import org.dbpedia.extraction.ontology.datatypes.{EnumerationDatatype}
+import org.dbpedia.extraction.ontology.datatypes.EnumerationDatatype
 
 /**
  * Parses enumerations.
  */
-class EnumerationParser(datatype : EnumerationDatatype) extends DataParser
+@SoftwareAgentAnnotation(classOf[EnumerationParser], AnnotationType.Parser)
+class EnumerationParser(datatype : EnumerationDatatype) extends DataParser[String]
 {
-    override def parse(node : Node) : Option[ParseResult[String]] =
+    private[dataparser] override def parse(node : Node) : Option[ParseResult[String]] =
     {
         node match
         {

@@ -1,5 +1,6 @@
 package org.dbpedia.extraction.wikiparser
 
+import org.dbpedia.extraction.config.provenance.{NodeRecord, ProvenanceRecord}
 import org.dbpedia.extraction.util.{Language, StringUtils}
 
 /**
@@ -9,7 +10,7 @@ import org.dbpedia.extraction.util.{Language, StringUtils}
  * @param children The contents of the value of this property
  * @param line The source line number of this property
  */
-case class PropertyNode(key : String, override val children : List[Node], override val line : Int) extends Node(children, line)
+case class PropertyNode(key : String, override val children : List[Node], override val line : Int) extends Node
 {
     def toWikiText: String =
     {
@@ -23,6 +24,8 @@ case class PropertyNode(key : String, override val children : List[Node], overri
     
     // properties are skipped for plain text
     def toPlainText = ""
+
+  override def getNodeRecord: NodeRecord = this.root.getNodeRecord.copy(Some(this.line))
 
     def propertyNodeValueToPlainText: String = children.map(_.toPlainText).mkString
 

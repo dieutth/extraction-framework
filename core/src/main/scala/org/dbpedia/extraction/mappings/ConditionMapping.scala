@@ -42,7 +42,7 @@ extends Extractor[TemplateNode]
       // be omitted. This constructor argument should be true if this object is part of 
       // a ConditionalMapping (which calls matches() before extract()) and false otherwise.
       val property = node.property(templateProperty).getOrElse(return false)
-      val propertyText = StringParser.parse(property) match{
+      val propertyText = StringParser.parseWithProvenance(property) match{
         case Some(s) => s.value.toLowerCase.trim
         case None => ""
       }
@@ -50,6 +50,7 @@ extends Extractor[TemplateNode]
       operator match
       {
           case "isSet" => ! propertyText.isEmpty
+          case "isIn" => value.split(",").map(_.trim.toLowerCase()).contains(propertyText)
           // FIXME: toLowerCase must use correct language locale
           case "equals" => propertyText == value.trim.toLowerCase
           // FIXME: toLowerCase must use correct language locale

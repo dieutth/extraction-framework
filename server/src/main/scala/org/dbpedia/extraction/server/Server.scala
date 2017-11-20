@@ -5,11 +5,12 @@ import java.util.logging.Logger
 
 import com.sun.jersey.api.container.httpserver.HttpServerFactory
 import com.sun.jersey.api.core.{PackagesResourceConfig, ResourceConfig}
+import org.dbpedia.extraction.config.ExtractionRecorder
 import org.dbpedia.extraction.config.provenance.Dataset
 import org.dbpedia.extraction.mappings._
 import org.dbpedia.extraction.server.Server._
 import org.dbpedia.extraction.server.stats.MappingStatsManager
-import org.dbpedia.extraction.util.{ExtractionRecorder, Language}
+import org.dbpedia.extraction.util.Language
 import org.dbpedia.extraction.util.Language.wikiCodeOrdering
 import org.dbpedia.extraction.util.StringUtils.prettyMillis
 import org.dbpedia.extraction.wikiparser.WikiTitle
@@ -112,16 +113,14 @@ object Server
     }
 
     private val extractionRecorder = new mutable.HashMap[ClassTag[_], mutable.HashMap[Language, ExtractionRecorder[_]]]()
-    def getExtractionRecorder[T: ClassTag](lang: Language, dataset : Dataset = null): org.dbpedia.extraction.util.ExtractionRecorder[T] = {
+    def getExtractionRecorder[T: ClassTag](lang: Language, dataset : Dataset = null): ExtractionRecorder[T] = {
         extractionRecorder.get(classTag[T]) match{
             case Some(s) => s.get(lang) match {
                 case None =>
-                    s(lang) = new ExtractionRecorder[T](null, 2000, null, null, if(dataset != null) ListBuffer(dataset) else ListBuffer())
+                    s(lang) = new ExtractionRecorder[T](null, 2000, null, null, if(dataset != null) List(dataset) else List())
                     s(lang).initialize(lang)
                     s(lang).asInstanceOf[ExtractionRecorder[T]]
-                case Some(er) =>
-                    if(dataset != null) if(!er.datasets.contains(dataset)) er.datasets += dataset
-                    er.asInstanceOf[ExtractionRecorder[T]]
+                case Some(er) => er.asInstanceOf[ExtractionRecorder[T]]
             }
             case None =>
                 extractionRecorder(classTag[T]) = new mutable.HashMap[Language, ExtractionRecorder[_]]()

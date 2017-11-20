@@ -1,5 +1,7 @@
 package org.dbpedia.extraction.wikiparser
 
+import org.dbpedia.extraction.config.provenance.{NodeRecord, ProvenanceRecord}
+
 /**
  * Represents a table.
  * 
@@ -13,7 +15,7 @@ package org.dbpedia.extraction.wikiparser
 case class TableNode( caption : Option[String],
                       override val children : List[TableRowNode],
                       override val line : Int )
-  extends Node(children, line)
+  extends Node
 {
     def toWikiText = ""  //TODO implement!!!
     def toPlainText = ""  //TODO implement!!!
@@ -23,6 +25,8 @@ case class TableNode( caption : Option[String],
               && NodeUtil.filterEmptyTextNodes(otherTableNode.children) == NodeUtil.filterEmptyTextNodes( children))
             case _ => false
         }
+
+    override def getNodeRecord: NodeRecord = this.root.getNodeRecord.copy(Some(this.line))
 }
 
 /**
@@ -32,15 +36,17 @@ case class TableNode( caption : Option[String],
  * @param line The (first) line where this table row is located in the source
  */
 case class TableRowNode( override val children : List[TableCellNode],
-                         override val line : Int ) extends Node(children, line)
+                         override val line : Int ) extends Node
 {
     def toWikiText = ""  //TODO implement!!!
     def toPlainText = ""  //TODO implement!!!
     override def equals(obj: scala.Any) = obj match
         {
-            case otherTableRowNode : TableRowNode => (NodeUtil.filterEmptyTextNodes(otherTableRowNode.children) == NodeUtil.filterEmptyTextNodes(children))
+            case otherTableRowNode : TableRowNode => NodeUtil.filterEmptyTextNodes(otherTableRowNode.children) == NodeUtil.filterEmptyTextNodes(children)
             case _ => false
         }
+
+    override def getNodeRecord: NodeRecord = this.root.getNodeRecord.copy(Some(this.line))
 }
 
 /**
@@ -56,7 +62,7 @@ case class TableCellNode (
   var colSpan: Int // FIXME: var for TableMapping.preprocessTable()
 
 ) 
-extends Node(children, line)
+extends Node
 {
     def toWikiText = ""  //TODO implement!!!
     def toPlainText = ""  //TODO implement!!!
@@ -67,4 +73,6 @@ extends Node(children, line)
             case _ => false
 
     }
+
+    override def getNodeRecord: NodeRecord = this.root.getNodeRecord.copy(Some(this.line))
 }

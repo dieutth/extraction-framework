@@ -149,6 +149,7 @@ object DBpediaDatasets
     val ArticleCategories: Dataset = datasets("article_categories")
     val ArticleTemplates: Dataset = datasets("article_templates")
     val ArticleTemplatesNested: Dataset = datasets("article_templates_nested")
+    val TemplateDefinitions: Dataset = datasets("template_definitions")
     val SkosCategories: Dataset = datasets("skos_categories")
     val RevisionUris: Dataset = datasets("revision_uris")
     val RevisionIds: Dataset = datasets("revision_ids")
@@ -198,6 +199,7 @@ object DBpediaDatasets
      */
     val InfoboxProperties: Dataset = datasets("infobox_properties")
     val InfoboxPropertiesMapped: Dataset = datasets("infobox_properties_mapped")
+    val InfoboxPropertiesExtended: Dataset = datasets("infobox_properties_extended")
     val InfoboxPropertyDefinitions: Dataset = datasets("infobox_property_definitions")
     val TemplateParameters: Dataset = datasets("template_parameters")
     val TemplateMappings: Dataset = datasets("template_mappings")

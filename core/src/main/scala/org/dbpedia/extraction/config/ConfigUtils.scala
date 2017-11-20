@@ -10,12 +10,12 @@ import org.dbpedia.extraction.config.mappings.ImageExtractorConfig
 import org.dbpedia.extraction.sources.Source
 import org.dbpedia.extraction.util.Language.wikiCodeOrdering
 import org.dbpedia.extraction.util.RichString.wrapString
-import org.dbpedia.extraction.util.{ExtractionRecorder, Language, RecordEntry, RecordSeverity}
-import org.dbpedia.extraction.wikiparser.{Namespace, WikiPage}
+import org.dbpedia.extraction.util.{Language, RichFile}
+import org.dbpedia.extraction.wikiparser.{Namespace, PageNode, WikiPage}
 
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 import scala.util.matching.Regex
 
 
@@ -38,26 +38,25 @@ object ConfigUtils {
     */
   val RangeRegex: Regex = """(\d*)-(\d*)""".r
 
-  //val baseDir = getValue(universalConfig , "base-dir", true){
-   // x => new File(x)
-      //if (! dir.exists) throw error("dir "+dir+" does not exist")
-      //dir
-  //}
+  private [config] val propertiesFileKey = "properties-filename-9642"
 
-  def loadConfig(filePath: String, charset: String = "UTF-8"): Properties = {
+  def loadConfig(filePath: String): Properties = {
     val file = new File(filePath)
-    loadFromStream(new FileInputStream(file), charset)
+    loadConfig(file.toURI.toURL)
   }
 
-  def loadConfig(url: URL): Object = {
+  def loadConfig(url: URL): Properties = {
+    val props = loadFromStream(url.openStream())
+    addPropertiesName(url.toString, props)
+    props
+  }
 
-    url match {
-      case selection =>
-        if(selection.getFile.endsWith(".json"))
-          loadJsonComfig(url)
-        else
-          loadFromStream(url.openStream())
-    }
+  private def addPropertiesName(uri: String, props: Properties)={
+    var logname = uri.replace("\\", "/").trim
+    logname = logname.substring(logname.lastIndexOf("/") + 1)
+    if(logname.contains("."))
+      logname = logname.substring(0, logname.indexOf("."))
+    props.put(propertiesFileKey, logname)
   }
 
   def loadJsonComfig(url: URL): JsonNode ={
@@ -183,7 +182,7 @@ object ConfigUtils {
     * @param wikiCode the wikicode of a given language
     * @return two lists: ._1: list of free images, ._2: list of nonfree images
     */
-  def loadImages(source: Source, wikiCode: String, extractionRecorder: ExtractionRecorder[WikiPage] = null): (Seq[String], Seq[String]) =
+  def loadImages(source: Source, wikiCode: String, extractionRecorder: ExtractionRecorder[PageNode] = null): (Seq[String], Seq[String]) =
   {
     val freeImages = new mutable.HashSet[String]()
     val nonFreeImages = new mutable.HashSet[String]()
@@ -192,10 +191,7 @@ object ConfigUtils {
         ImageExtractorConfig.ImageLinkRegex() <- List(page.title.encoded) )
     {
       if(extractionRecorder != null) {
-        val records = page.getExtractionRecords() match {
-          case seq: Seq[RecordEntry[WikiPage]] if seq.nonEmpty => seq
-          case _ => Seq(new RecordEntry[WikiPage](page, page.uri, RecordSeverity.Info, page.title.language))
-        }
+        val records = page.recordEntries
         //forward all records to the recorder
         extractionRecorder.record(records:_*)
       }
@@ -207,5 +203,40 @@ object ConfigUtils {
     }
 
     (freeImages.toSeq, nonFreeImages.toSeq)
+  }
+
+
+  def getBaseDir(properties: Properties): RichFile ={
+    Try{new File(getString(properties , "base-dir", required = true))} match{
+      case Success(d) => if (! d.exists)
+        throw sys.error("dir "+d+" does not exist")
+      else
+        d
+      case Failure(f) => throw f
+    }
+  }
+
+  private def loadRichFile(properties: Properties, key: String, suffix: String = null, exists: Boolean = false): RichFile ={
+    val baseDir = getBaseDir(properties)
+    val fileStump = getString(properties, key, required = true)
+    val fs = baseDir.getFile.getAbsoluteFile + "/" + fileStump + (if(suffix != null) suffix else "")
+    loadRichFile(fs, exists)
+  }
+
+  def loadRichFile(file: String, exists: Boolean): RichFile ={
+    Try{new File(file)} match{
+      case Success(f) if !exists || exists && f.exists() => f
+      case _ => sys.error(file + " does not exist!")
+    }
+  }
+
+  def loadInputFile(properties: Properties, key: String, suffix: String = null): RichFile ={
+    val suf = if(suffix != null) suffix else getString(properties, "suffix")
+    loadRichFile(properties, key, suf, exists = true)
+  }
+
+  def loadOutputFile(properties: Properties, key: String, suffix: String = null): RichFile ={
+    val suf = if(suffix != null) suffix else getString(properties, "output-suffix")
+    loadRichFile(properties, key, suf)
   }
 }

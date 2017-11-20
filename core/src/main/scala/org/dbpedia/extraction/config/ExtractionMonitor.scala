@@ -1,18 +1,16 @@
-package org.dbpedia.extraction.mappings
+package org.dbpedia.extraction.config
 
 import java.io.File
 import java.net.URL
 import java.util.concurrent.atomic.AtomicLong
 
 import org.apache.jena.rdf.model._
-import org.dbpedia.extraction.config.{Config, ConfigUtils}
 import org.dbpedia.extraction.config.provenance.Dataset
-import org.dbpedia.extraction.util.ExtractionRecorder
-import org.dbpedia.extraction.util._
+import org.dbpedia.extraction.util.JsonConfig
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-import sys.process._
+import scala.sys.process._
 import scala.util.Try
 
 class ExtractionMonitor {
@@ -66,7 +64,7 @@ class ExtractionMonitor {
 
     // Load ignorable Exceptions
     var exceptions = ListBuffer[String]()
-    er.datasets.foreach(dataset => ignorableExceptionsFile.get(dataset.canonicalUri).foreach(jsonNode => {
+    er.getDatasets.foreach(dataset => ignorableExceptionsFile.get(dataset.canonicalUri).foreach(jsonNode => {
       val it = jsonNode.elements()
       while(it.hasNext){
         exceptions += it.next().asText()
@@ -121,11 +119,9 @@ class ExtractionMonitor {
       val language = er.language
       val oldDate = old_version_URL.split("/")(3)
       val url = old_version_URL + language.wikiCode + "/"+ oldDate + "_dataid_" + language.wikiCode + ".ttl"
-      new URL(url) #> new File("dataID-tmp.ttl")
 
       // Compare & Get the results
-      dataIDResults = "DATAIDRESULTS: \n" +
-      compareTripleCount("dataID-tmp.ttl", er, datasets)
+      //compareTripleCount(new URL(url), er, datasets)
     }
     val exceptions = mutable.HashMap[String, Int]()
     errors(er).foreach(ex => {
@@ -135,7 +131,7 @@ class ExtractionMonitor {
     summary.put("EXCEPTIONCOUNT", error.asInstanceOf[Object])
 
     val s : AtomicLong = new AtomicLong(0)
-    val map = er.getSuccessfulPageCount()
+    val map = er.getSuccessfulPageCount
     map.keySet.foreach(key => s.set(s.get() + map(key).get()))
     summary.put("SUCCESSFUL", s)
     summary.put("CRASHED", crashed.asInstanceOf[Object])
@@ -149,14 +145,14 @@ class ExtractionMonitor {
   /**
     * Reads two RDF files and compares the triple-count-values.
     */
-  def compareTripleCount(dataIDfile : String, extractionRecorder: ExtractionRecorder[_], datasets : ListBuffer[Dataset]): String ={
+  def compareTripleCount(dataIDfile : URL, extractionRecorder: ExtractionRecorder[_], datasets : ListBuffer[Dataset]): String ={
 
     var resultString = ""
 
     // Load Graph
     val oldModel = ModelFactory.createDefaultModel()
 
-    oldModel.read(dataIDfile)
+    oldModel.read(dataIDfile.openStream(), "")
     val oldValues = getPropertyValues(oldModel, oldModel.getProperty(tripleProperty))
 
     // Compare Values

@@ -1,24 +1,30 @@
 package org.dbpedia.extraction.mappings
 
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
+import org.dbpedia.extraction.config.ExtractionRecorder
 import org.dbpedia.extraction.config.provenance.DBpediaDatasets
 import org.dbpedia.extraction.ontology.datatypes.Datatype
 import org.dbpedia.extraction.transform.Quad
 import org.dbpedia.extraction.wikiparser._
-import org.dbpedia.extraction.dataparser.{ObjectParser, DateTimeParser, StringParser}
+import org.dbpedia.extraction.dataparser.{DateTimeParser, ObjectParser, StringParser}
 import org.dbpedia.extraction.config.mappings.PersondataExtractorConfig
 import org.dbpedia.extraction.ontology.Ontology
 import org.dbpedia.extraction.util.Language
+
 import scala.collection.mutable.ArrayBuffer
 import scala.language.reflectiveCalls
+import scala.reflect.ClassTag
 
 /**
  * Extracts information about persons (date and place of birth etc.) from the English and German Wikipedia, represented using the FOAF vocabulary.
  */
+@SoftwareAgentAnnotation(classOf[PersondataExtractor], AnnotationType.Extractor)
 class PersondataExtractor(
   context : {
     def ontology : Ontology
     def redirects : Redirects // redirects required by DateTimeParser
-    def language : Language 
+    def language : Language
+      def recorder[T: ClassTag] : ExtractionRecorder[T]
   }
 )
 extends PageNodeExtractor
@@ -76,7 +82,7 @@ extends PageNodeExtractor
                 {
                     case key if key == name =>
                     {
-                        for(nameValue <- StringParser.parse(property).map(_.value))
+                        for(nameValue <- StringParser.parseWithProvenance(property).map(_.value))
                         {
                             val nameParts = nameValue.split(",")
                             if (nameParts.size == 2)
@@ -105,13 +111,13 @@ extends PageNodeExtractor
                     {
                         case key if key == alternativeNames =>
                         {
-                            for(value <- StringParser.parse(property))
+                            for(value <- StringParser.parseWithProvenance(property))
                             {
                             }
                         }
                         case key if key == description =>
                         {
-                            for(value <- StringParser.parse(property).map(_.value))
+                            for(value <- StringParser.parseWithProvenance(property).map(_.value))
                             {
                                 quads += new Quad(language, DBpediaDatasets.Persondata, subjectUri, dcDescriptionProperty, value, property.sourceIri, new Datatype("rdf:langString"))
                             }
@@ -155,19 +161,19 @@ extends PageNodeExtractor
 
     private def getDate(node: Node) : Option[(String, Datatype)] =
     {
-        for (date <- dateParser.parse(node))
+        for (date <- dateParser.parseWithProvenance(node))
         {
             return Some((date.toString, date.value.datatype))
         }
-        for (date <- monthYearParser.parse(node))
+        for (date <- monthYearParser.parseWithProvenance(node))
         {
             return Some((date.toString, date.value.datatype))
         }
-        for (date <- monthDayParser.parse(node))
+        for (date <- monthDayParser.parseWithProvenance(node))
         {
             return Some((date.toString, date.value.datatype))
         }
-        for (date <- yearParser.parse(node))
+        for (date <- yearParser.parseWithProvenance(node))
         {
             return Some((date.toString, date.value.datatype))
         }

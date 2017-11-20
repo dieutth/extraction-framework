@@ -1,6 +1,7 @@
 package org.dbpedia.extraction.mappings
 
-import org.dbpedia.extraction.config.provenance.DBpediaDatasets
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
+import org.dbpedia.extraction.config.provenance.{DBpediaDatasets, Dataset}
 import org.dbpedia.extraction.transform.Quad
 import org.dbpedia.extraction.util.ExtractorUtils
 import org.dbpedia.extraction.wikiparser._
@@ -10,6 +11,7 @@ import scala.language.reflectiveCalls
 /**
  *  Extracts structured data based on hand-generated mappings of Wikipedia infoboxes to the DBpedia ontology.
  */
+@SoftwareAgentAnnotation(classOf[MappingExtractor], AnnotationType.Extractor)
 class MappingExtractor(
   context : {
     def mappings : Mappings
@@ -23,7 +25,7 @@ extends PageNodeExtractor
 
   private val resolvedMappings = context.redirects.resolveMap(templateMappings)
 
-  override val datasets = templateMappings.values.flatMap(_.datasets).toSet ++ tableMappings.flatMap(_.datasets).toSet ++ Set(DBpediaDatasets.OntologyPropertiesLiterals)
+  override val datasets: Set[Dataset] = templateMappings.values.flatMap(_.datasets).toSet ++ tableMappings.flatMap(_.datasets).toSet ++ Set(DBpediaDatasets.OntologyPropertiesLiterals)
 
   override def extract(page : PageNode, subjectUri : String) : Seq[Quad] =
   {
@@ -48,7 +50,8 @@ extends PageNodeExtractor
       {
         resolvedMappings.get(templateNode.title.decoded) match
         {
-          case Some(mapping) => mapping.extract(templateNode, subjectUri)
+          case Some(mapping) =>
+            mapping.extract(templateNode, subjectUri)
           case None => Seq.empty
         }
       }

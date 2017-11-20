@@ -1,7 +1,7 @@
 package org.dbpedia.extraction.mappings
 
-import org.dbpedia.extraction.annotations.ExtractorAnnotation
-import org.dbpedia.extraction.config.Config
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
+import org.dbpedia.extraction.config.{Config, ExtractionRecorder, RecordEntry}
 import org.dbpedia.extraction.config.provenance.DBpediaDatasets
 import org.dbpedia.extraction.nif.WikipediaNifExtractor
 import org.dbpedia.extraction.ontology.Ontology
@@ -10,6 +10,7 @@ import org.dbpedia.extraction.util.{Language, MediaWikiConnector}
 import org.dbpedia.extraction.wikiparser._
 
 import scala.language.reflectiveCalls
+import scala.reflect.ClassTag
 
 /**
   * Extracts page html.
@@ -24,12 +25,13 @@ import scala.language.reflectiveCalls
   * It will be expanded to cover the whole wikipage in the future.
   */
 
-@ExtractorAnnotation("nif extractor")
+@SoftwareAgentAnnotation(classOf[NifExtractor], AnnotationType.Extractor)
 class NifExtractor(
      context : {
        def ontology : Ontology
        def language : Language
        def configFile : Config
+       def recorder[T: ClassTag] : ExtractionRecorder[T]
      }
    )
   extends WikiPageExtractor
@@ -57,12 +59,12 @@ class NifExtractor(
     if(pageNode.isRedirect || pageNode.isDisambiguation) return Seq.empty
 
     //Retrieve page text
-    val html = mwConnector.retrievePage(pageNode.title, apiParametersFormat, pageNode.isRetry) match{
+    val html = mwConnector.retrievePage(pageNode.title, apiParametersFormat) match{
       case Some(t) => NifExtractor.postProcessExtractedHtml(pageNode.title, t)
       case None => return Seq.empty
     }
 
-    new WikipediaNifExtractor(context, pageNode).extractNif(html)(err => pageNode.addExtractionRecord(err))
+    new WikipediaNifExtractor(context, pageNode).extractNif(html)(err => context.recorder[PageNode].record(err.asInstanceOf[RecordEntry[PageNode]]))
   }
 
 }

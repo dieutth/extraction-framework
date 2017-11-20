@@ -10,6 +10,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success}
 
 import scala.collection.convert.decorateAsScala._
+import scala.language.postfixOps
 
 /**
  * Template transformations.
@@ -24,26 +25,35 @@ import scala.collection.convert.decorateAsScala._
  */
 object TemplateTransformConfig {
 
-  private val textNodeParamsRegex = "\\$\\(([0-9]+)\\|([^\\|]*)\\|([^\\)]*)\\)"r
+  private val textNodeParamsRegex = "\\$\\(([\\w-]+)\\|([^\\|]*)\\|([^\\)]*)\\)"r
   private var transformerMap: Map[Language, Map[String, (TemplateNode, Language) => List[Node]]] = _
 
   val mappingsFile: JsonConfig = new JsonConfig(this.getClass.getClassLoader.getResource("templatetransform.json"))
   transformerMap = (for (lang <- mappingsFile.keys() if lang != "comment") yield {
-    Language(lang) -> (for(trans <- mappingsFile.getMap(lang)) yield{
+    val language = Language(lang)
+    language -> (for(trans <- mappingsFile.getMap(lang)) yield{
       val templateNames = if(trans._1.contains("$(lang)"))
         Language.map.keys.map(x => trans._1.replaceAll("\\$\\(lang\\)", x))
       else
         List(trans._1)
 
       for(template <- templateNames) yield {
-        val keys = if (trans._2.get("keys") != null) trans._2.get("keys").asInstanceOf[ArrayNode].iterator().asScala.toList.map(_.asText()) else null
+        val keys = if (trans._2.get("keys") != null) trans._2.get("keys").asInstanceOf[ArrayNode].iterator().asScala.toList.map(_.asText()) else List()
         val contains = if (trans._2.get("whileList") != null) trans._2.get("whileList").asBoolean() else false
         val replace = if (trans._2.get("replace") != null) trans._2.get("replace").asText() else null
-        template -> (trans._2.get("transformer").asText() match {
+        val langParam = Option(if (trans._2.get("langParameter") != null) trans._2.get("langParameter").asText() else null)
+        val templatesOnly = if (trans._2.get("templatesOnly") != null) trans._2.get("templatesOnly").asBoolean() else false
+        template.trim.toLowerCase(language.locale) -> (trans._2.get("transformer").asText() match {
           case "externalLinkNode" => externalLinkNode _
           case "unwrapTemplates" => unwrapTemplates { p => if (contains) keys.contains(p.key) else !keys.contains(p.key) } _
-          case "extractChildren" => extractAndReplace(p => if (contains) keys.contains(p.key) else !keys.contains(p.key), replace) _
-          case "getLangText" => getLangText(p => if (contains) keys.contains(p.key) else !keys.contains(p.key), template.substring(5)) _
+          case "extractChildren" => extractAndReplace(p => if (contains) keys.contains(p.key) else !keys.contains(p.key), templatesOnly, replace) _
+          case "getLangText" => {
+            val langcode = langParam match{
+              case Some(l) => (node: TemplateNode) => node.property(l).get.children.head.toPlainText
+              case None => (node: TemplateNode) => template.substring(5)
+            }
+            getLangText(p => if (contains) keys.contains(p.key) else !keys.contains(p.key), langcode) _
+          }
           case "textNode" => textNode {
             Option(replace) match {
               case Some(s) => s
@@ -76,16 +86,23 @@ object TemplateTransformConfig {
   }
 
   // General functions
-  private def getLangText(filter: PropertyNode => Boolean, stringLang: String)(node: TemplateNode, lang:Language) : List[Node] = {
+  private def getLangText(filter: PropertyNode => Boolean, langCode: TemplateNode => String)(node: TemplateNode, lang:Language) : List[Node] = {
     val children = extractChildren(filter, split = false)(node, lang)
     val text = children.headOption match{
       case Some(t) => t.toPlainText
       case None => ""
     }
 
-    textNode("<br />")(node, lang) :::
-    List(TextNode(text, node.line, Language(stringLang))) :::
-    textNode("<br />")(node, lang)
+    Language.getByIsoCode(langCode(node)) match{
+      case Some(l) =>
+        textNode("<br />")(node, lang) :::
+          List(TextNode(text, node.line, l)) :::
+          textNode("<br />")(node, lang)
+      case None =>
+        textNode("<br />")(node, lang) :::
+          List(TextNode(text, node.line)) :::
+          textNode("<br />")(node, lang)
+    }
   }
 
   /**
@@ -94,7 +111,7 @@ object TemplateTransformConfig {
   private def extractChildren(filter: PropertyNode => Boolean, split : Boolean = true)(node: TemplateNode, lang:Language) : List[Node] = {
     // We have to reverse because flatMap prepends to the final list
     // while we want to keep the original order
-    val children : List[Node] = node.children.filter(filter)
+    val children : List[Node] = node.children.filter(filter).flatMap(_.children).reverse
 
     val splitChildren = new ArrayBuffer[Node]()
     val splitTxt = if (split) "<br />" else " "
@@ -114,24 +131,32 @@ object TemplateTransformConfig {
     }).toList
   }
 
-  private def extractAndReplace(filter: PropertyNode => Boolean, replace: String = null)(node: TemplateNode, lang:Language) : List[Node] = {
+  private def extractAndReplace(filter: PropertyNode => Boolean, templateOnly: Boolean = false, replace: String = null)(node: TemplateNode, lang:Language) : List[Node] = {
     val children = extractChildren(filter, replace == null)(node, lang)
     if(replace != null) {
       //in this case we replace the position variables of a given replace-string with the children of the same number
       //also we frame the results in line breaks to create multiple triples
-      textNode("<br />")(node, lang) :::
+      //DOCME the open br with exclusive encapsulates the resulting value of the template if (and only if) only these values should be used as object values in an infobox value
+      textNode(if(templateOnly) "</br>" else "<br />")(node, lang) :::
         textNode(textNodeParamsRegex.replaceAllIn(replace, x => {
           val ind = x.group(1).toInt - 1
-          if (children.size > ind)
-          // prefix  +  main replacement         +  postfix
-            x.group(2) + children(ind).toPlainText + x.group(3)
+          if (children.size > ind) {
+            val value = children(ind).toPlainText.trim
+            // prefix  +  main replacement         +  postfix
+            if (value.nonEmpty)
+              x.group(2) + value + x.group(3)
+            else
+              ""
+          }
           else
             ""
         }))(node, lang) :::
-        textNode("<br />")(node, lang)
+        textNode(if(templateOnly) "<br exclusive=\"true\" >" else "<br />")(node, lang)
     }
     else
-      children
+      textNode(if(templateOnly) "</br>" else "<br />")(node, lang) :::
+      children :::
+      textNode(if(templateOnly) "<br exclusive=\"true\" >" else "<br />")(node, lang)
   }
 
   private def identity(node: TemplateNode, lang:Language) : List[Node] = List(node)
@@ -212,7 +237,7 @@ object TemplateTransformConfig {
 
      val mapKey = if (transformerMap.contains(lang)) lang else Language.English
 
-     val transformation = transformerMap(mapKey).get(node.title.decoded) match{
+     val transformation = transformerMap(mapKey).get(node.title.decoded.toLowerCase(lang.locale)) match{
        case Some(trans) => trans
        case None =>
          //TODO record un-transformed template to have statistics about which template to cover!

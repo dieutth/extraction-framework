@@ -1,17 +1,20 @@
 package org.dbpedia.extraction.mappings
 
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
 import org.dbpedia.extraction.config.provenance.DBpediaDatasets
 import org.dbpedia.extraction.dataparser.{GeoCoordinate, GeoCoordinateParser}
 import org.dbpedia.extraction.transform.Quad
 import org.dbpedia.extraction.wikiparser._
 import org.dbpedia.extraction.ontology.Ontology
-import org.dbpedia.extraction.util.{Language, ExtractorUtils}
+import org.dbpedia.extraction.util.{ExtractorUtils, Language}
+
 import scala.collection.mutable.ArrayBuffer
 import scala.language.reflectiveCalls
 
 /**
  * Extracts geo-coodinates.
  */
+@SoftwareAgentAnnotation(classOf[GeoExtractor], AnnotationType.Extractor)
 class GeoExtractor( 
   context : {
     def ontology : Ontology
@@ -40,7 +43,7 @@ extends PageNodeExtractor
     // Not recursing into templates as these are presumed to be handled by template-based mechanisms (GeoCoordinatesMapping).
     for(
       templateNode @ TemplateNode(_, _, _, _) <- page.children;
-      coordinate <- geoCoordinateParser.parse(templateNode)
+      coordinate <- geoCoordinateParser.parseWithProvenance(templateNode)
     )
     {
       return writeGeoCoordinate(coordinate.value, subjectUri, page.sourceIri)

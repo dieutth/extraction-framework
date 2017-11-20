@@ -1,5 +1,6 @@
 package org.dbpedia.extraction.mappings
 
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
 import org.dbpedia.extraction.config.provenance.{DBpediaDatasets, Dataset}
 import org.dbpedia.extraction.ontology.{Ontology, OntologyClass, OntologyProperty}
 import org.dbpedia.extraction.transform.Quad
@@ -10,7 +11,9 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.language.reflectiveCalls
 
-class TemplateMapping( 
+
+@SoftwareAgentAnnotation(classOf[TemplateMapping], AnnotationType.Extractor)
+class   TemplateMapping(
   val mapToClass : OntologyClass,
   val correspondingClass : OntologyClass, // must be public val for converting to rml
   val correspondingProperty : OntologyProperty, // must be public for converting to rml
@@ -26,6 +29,7 @@ extends Extractor[TemplateNode]
 
     private val classOwlThing = context.ontology.classes("owl:Thing")
     private val propertyRdfType = context.ontology.properties("rdf:type")
+    private val dboPerson = context.ontology.getOntologyClass("dbo:Person").get
 
     override def extract(node: TemplateNode, subjectUri: String): Seq[Quad] =
     {
@@ -67,7 +71,14 @@ extends Extractor[TemplateNode]
 
                 // Condition #3
                 // The current mapping is a subclass or a superclass of previous class or owl:Thing
-                val condition3_subclass = mapToClass.relatedClasses.contains(pageClass) || pageClass.relatedClasses.contains(mapToClass) || mapToClass.equals(classOwlThing) || pageClass.equals(classOwlThing)
+                // FIXME: I think the third condition is too harsh for some examples, especially for subclasses of Person. For example: a person can be an Athlete and a Soldier in his life
+                // Chile: I added the exception for dbo:Person
+                val condition3_subclass =
+                  mapToClass.isSubclassOf(dboPerson) && pageClass.isSubclassOf(dboPerson) ||
+                  mapToClass.relatedClasses.contains(pageClass) ||
+                  pageClass.relatedClasses.contains(mapToClass) ||
+                  mapToClass.equals(classOwlThing) ||
+                  pageClass.equals(classOwlThing)
 
                 // If all above conditions are met then use the main resource, otherwise create a new one
                 val instanceUri =

@@ -4,20 +4,25 @@ import org.dbpedia.extraction.ontology.datatypes.{Datatype, DimensionDatatype, U
 import org.dbpedia.extraction.wikiparser._
 import java.text.ParseException
 import java.util.logging.{Level, Logger}
+
 import org.dbpedia.extraction.ontology.Ontology
 import org.dbpedia.extraction.util.Language
 import org.dbpedia.extraction.mappings.Redirects
 import java.lang.Double
+
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
 import org.dbpedia.extraction.config.dataparser.DataParserConfig
+
 import scala.language.reflectiveCalls
 
+@SoftwareAgentAnnotation(classOf[UnitValueParser], AnnotationType.Parser)
 class UnitValueParser( extractionContext : {
                            def ontology : Ontology
                            def language : Language
                            def redirects : Redirects },
                         inputDatatype : Datatype,
                         strict : Boolean = false,
-                        multiplicationFactor : Double = 1.0) extends DataParser
+                        multiplicationFactor : Double = 1.0) extends DataParser[Double]
 {
     private val logger = Logger.getLogger(getClass.getName)
 
@@ -89,7 +94,7 @@ class UnitValueParser( extractionContext : {
     private lazy val FeetUnitDataType = extractionContext.ontology.datatypes("foot").asInstanceOf[UnitDatatype]
     private lazy val InchUnitDataType = extractionContext.ontology.datatypes("inch").asInstanceOf[UnitDatatype]
 
-    override def parse(node : Node) : Option[ParseResult[Double]] =
+    private[dataparser] override def parse(node : Node) : Option[ParseResult[Double]] =
     {
         val errors = if(logger.isLoggable(Level.FINE)) Some(new ParsingErrors()) else None
 

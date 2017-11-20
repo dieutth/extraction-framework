@@ -1,23 +1,22 @@
 package org.dbpedia.extraction.server
 
 import java.io.File
+import java.net.URL
 import java.util.logging.{Level, Logger}
 
-import org.dbpedia.extraction.config.provenance.Dataset
+import org.dbpedia.extraction.config.ExtractionRecorder
 import org.dbpedia.extraction.destinations.Destination
 import org.dbpedia.extraction.mappings._
 import org.dbpedia.extraction.ontology.Ontology
 import org.dbpedia.extraction.ontology.io.OntologyReader
 import org.dbpedia.extraction.sources.{Source, WikiSource, XMLSource}
-import org.dbpedia.extraction.util.{ExtractionRecorder, Language}
+import org.dbpedia.extraction.transform.Quad
+import org.dbpedia.extraction.util.Language
 import org.dbpedia.extraction.wikiparser._
 
-import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 import scala.reflect.ClassTag
 import scala.xml.Elem
 
-import scala.reflect._
 
 /**
  * Base class for extraction managers.
@@ -33,7 +32,6 @@ abstract class ExtractionManager(
     customTestExtractors: Map[Language, Seq[Class[_ <: Extractor[_]]]])
 {
   self =>
-    
     private val logger = Logger.getLogger(classOf[ExtractionManager].getName)
 
     def mappingExtractor(language : Language) : WikiPageExtractor
@@ -65,11 +63,26 @@ abstract class ExtractionManager(
     
     protected val parser: WikiParser = WikiParser.getInstance()
 
+  def extract(title: String, destination: Destination, language: Language): Unit = {
+    val extract = mappingExtractor(language)
+    val source = WikiSource.fromTitles(List(WikiTitle.parse(title, Language.English)), new URL(Language.English.apiUri), Language.English)
+    val er = Server.getExtractionRecorder[Quad](language)
+    for (page <- source){
+      val quads = extract.extract(page, page.uri)
+      quads.foreach(q => er.record(q))
+      destination.write(quads.sortBy(x => (x.subject, x.predicate)).reverse)
+    }
+  }
+
     def extract(source: Source, destination: Destination, language: Language, useCustomExtraction: Boolean = false): Unit = {
       val extract = if (useCustomExtraction) customExtractor(language) else mappingExtractor(language)
+      val er = Server.getExtractionRecorder[Quad](language)
       destination.open()
-      for (page <- source)
-        destination.write(extract.extract(page, page.uri))
+      for (page <- source){
+        val quads = extract.extract(page, page.uri)
+        quads.foreach(q => er.record(q))
+        destination.write(quads.sortBy(x => (x.subject, x.predicate)).reverse)
+      }
       destination.close()
     }
 
@@ -102,7 +115,7 @@ abstract class ExtractionManager(
         logHandler.setLevel(Level.WARNING)
         Logger.getLogger(classOf[OntologyReader].getName).addHandler(logHandler)
 
-        val newOntologyPagesMap = newOntologyPages.map(parser).flatten.map(page => (page.title, page)).toMap
+        val newOntologyPagesMap = newOntologyPages.flatMap(parser.apply(_)).map(page => (page.title, page)).toMap
         val updatedOntologyPages = (ontologyPages ++ newOntologyPagesMap).values
 
         //Load ontology
@@ -132,7 +145,7 @@ abstract class ExtractionManager(
             WikiSource.fromNamespaces(namespaces, url, language)
         }
         
-        source.map(parser).flatten.map(page => (page.title, page)).toMap
+        source.flatMap(parser.apply(_)).map(page => (page.title, page)).toMap
     }
 
     protected def loadDisambiguations(): Disambiguations =
@@ -222,7 +235,7 @@ abstract class ExtractionManager(
         val context = new {
           val ontology: Ontology = self.ontology()
           val language: Language = lang
-          val redirects: Redirects = new Redirects(Map())
+          val redirects: Redirects = self.redirects.getOrElse(lang, new Redirects(Map()))
           val mappingPageSource: Traversable[WikiPage] = self.mappingPageSource(lang)
           val disambiguations: Disambiguations = self.disambiguations
           val configFile: ServerConfiguration = Server.config

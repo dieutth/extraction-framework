@@ -1,22 +1,27 @@
 package org.dbpedia.extraction.dataparser
 
-import org.dbpedia.extraction.wikiparser.{TemplateNode, Node}
+import org.dbpedia.extraction.wikiparser.{Node, TemplateNode}
 import java.util.logging.{Level, Logger}
+
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
+
 import util.control.ControlThrowable
 import org.dbpedia.extraction.util.Language
 import org.dbpedia.extraction.config.dataparser.GeoCoordinateParserConfig
 import org.dbpedia.extraction.mappings.Redirects
+
 import scala.language.reflectiveCalls
 
 /**
  * Parses geographical coordinates.
  */
+@SoftwareAgentAnnotation(classOf[GeoCoordinateParser], AnnotationType.Parser)
 class GeoCoordinateParser( 
     extractionContext : {  
       def language : Language  
       def redirects : Redirects 
       } 
-    ) extends DataParser
+    ) extends DataParser[GeoCoordinate]
 {
     private val templateNames = GeoCoordinateParserConfig.coordTemplateNames
 
@@ -33,9 +38,9 @@ class GeoCoordinateParser(
     
     private val Coordinate = ("""([0-9]{1,2})º([0-9]{1,2})\'([0-9]{1,2}(?:\.[0-9]{1,2})?)?\"?[\s]?("""+ latHemRegex +""")[\s]([0-9]{1,3})º([0-9]{1,2})\'([0-9]{1,2}(?:\.[0-9]{1,2})?)?\"?[\s]?("""+ lonHemRegex +""")""").r
     private val LatDir = ("""("""+latHemRegex+""")""").r
-    
 
-    override def parse(node : Node) : Option[ParseResult[GeoCoordinate]] =
+
+  private[dataparser] override def parse(node : Node) : Option[ParseResult[GeoCoordinate]] =
     {
         try
         {

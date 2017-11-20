@@ -1,6 +1,8 @@
 package org.dbpedia.extraction.dataparser
 
+import org.dbpedia.extraction.config.ExtractionRecorder
 import org.dbpedia.extraction.mappings.Redirects
+import org.dbpedia.extraction.ontology.Ontology
 import org.dbpedia.extraction.ontology.datatypes.Datatype
 import org.scalatest.Matchers
 import org.scalatest.FlatSpec
@@ -9,6 +11,8 @@ import org.dbpedia.extraction.sources.MemorySource
 import org.dbpedia.extraction.util.Language
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
+
+import scala.reflect.ClassTag
 
 @RunWith(classOf[JUnitRunner])
 class DateTimeParserTest extends FlatSpec with Matchers
@@ -686,7 +690,9 @@ class DateTimeParserTest extends FlatSpec with Matchers
         val context = new
         {
             def language : Language = lang
+            def ontology: Ontology = ontology
             def redirects : Redirects = new Redirects(Map())
+            def recorder[T: ClassTag] : ExtractionRecorder[T] = new ExtractionRecorder[T]()
         }
         val dateParser = new DateTimeParser(context, new Datatype(datatype), false)
         val page = new WikiPage(WikiTitle.parse("TestPage", lang), input)

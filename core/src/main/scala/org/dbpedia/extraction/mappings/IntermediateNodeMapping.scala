@@ -1,18 +1,21 @@
 package org.dbpedia.extraction.mappings
 
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
+import org.dbpedia.extraction.config.{ExtractionRecorder, RecordCause, RecordEntry}
 import org.dbpedia.extraction.config.provenance.{DBpediaDatasets, Dataset}
 import org.dbpedia.extraction.transform.Quad
-import org.dbpedia.extraction.wikiparser.{NodeUtil, TemplateNode, WikiPage}
+import org.dbpedia.extraction.wikiparser.{NodeUtil, PageNode, TemplateNode, WikiPage}
 import org.dbpedia.extraction.ontology.{Ontology, OntologyClass, OntologyProperty}
-import org.dbpedia.extraction.util.{ExtractionRecorder, Language, RecordEntry, RecordSeverity}
 
 import scala.collection.mutable.ArrayBuffer
 import org.dbpedia.extraction.config.dataparser.DataParserConfig
+import org.dbpedia.extraction.util.Language
 
 import scala.collection.mutable
 import scala.language.reflectiveCalls
 import scala.reflect.ClassTag
 
+@SoftwareAgentAnnotation(classOf[IntermediateNodeMapping], AnnotationType.Extractor)
 class IntermediateNodeMapping (
   val nodeClass : OntologyClass, // public for rml mappings
   val correspondingProperty : OntologyProperty, //public for rml mappings
@@ -34,20 +37,21 @@ extends PropertyMapping
 
   override def extract(node : TemplateNode, subjectUri : String) : Seq[Quad] =
   {
-    var graph = new ArrayBuffer[Quad]()
+    val graph = new ArrayBuffer[Quad]()
 
     val affectedTemplatePropertyNodes = mappings.flatMap(_ match {
       case spm : SimplePropertyMapping => node.property(spm.templateProperty)
+      case dim : DateIntervalMapping => node.property(dim.templateProperty)
       case _ => None
     }).toSet //e.g. Set(leader_name, leader_title)
 
     val valueNodes = affectedTemplatePropertyNodes.map(NodeUtil.splitPropertyNode(_, splitRegex))
 
-    //more than one template proerty is affected (e.g. leader_name, leader_title)
+    //more than one template property is affected (e.g. leader_name, leader_title)
     if(affectedTemplatePropertyNodes.size > 1)
     {
       if(valueNodes.forall(_.size <= 1))
-        context.recorder[TemplateNode].record(new RecordEntry[TemplateNode](node, node.title.encoded, RecordSeverity.Info, context.language, "IntermediateNodeMapping for multiple properties have multiple values in: " + subjectUri))
+        context.recorder[PageNode].record(new RecordEntry[PageNode](node.root, RecordCause.Internal, context.language, "IntermediateNodeMapping for multiple properties have multiple values in: " + subjectUri))
 
       createInstance(graph, node, subjectUri)
     }
@@ -56,9 +60,7 @@ extends PropertyMapping
     {
       //allow multiple values in this property
       for(valueNodesForOneProperty <- valueNodes; value <- valueNodesForOneProperty)
-      {
         createInstance(graph, value.parent.asInstanceOf[TemplateNode], subjectUri)
-      }
     }
 
     graph

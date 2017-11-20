@@ -3,12 +3,11 @@ package org.dbpedia.extraction.config
 import java.io.{File, FileOutputStream, OutputStreamWriter, Writer}
 import java.net.URL
 import java.util.Properties
-import java.util.logging.{Level, Logger}
 
 import org.dbpedia.extraction.config.provenance.Dataset
 import org.dbpedia.extraction.destinations.formatters.Formatter
 import org.dbpedia.extraction.destinations.formatters.UriPolicy._
-import org.dbpedia.extraction.mappings.{ExtractionMonitor, Extractor}
+import org.dbpedia.extraction.mappings.Extractor
 import org.dbpedia.extraction.util.RichFile.wrapFile
 import org.dbpedia.extraction.util._
 import org.dbpedia.extraction.wikiparser.Namespace
@@ -21,14 +20,10 @@ import ConfigUtils._
 import org.dbpedia.extraction.config.Config.{AbstractParameters, MediaWikiConnection, NifParameters, SlackCredentials}
 
 
-class Config(val configPath: String) extends
-  Properties(Config.universalProperties)
+class Config(properties: Properties) extends Properties(Config.combineProperties(Config.universalProperties, properties))
 {
+  def this(configPath: String) = this(ConfigUtils.loadConfig(configPath))
 
-  if(configPath != null)
-    this.putAll(ConfigUtils.loadConfig(configPath))
-
-  private val logger = Logger.getLogger(getClass.getName)
   /**
     * load two config files:
     * 1. the universal config containing properties universal for a release
@@ -39,12 +34,16 @@ class Config(val configPath: String) extends
     Option(getString(this, key))
   }
 
-  def throwMissingPropertyException(property: String, required: Boolean): Unit ={
-    if(required)
-      throw new IllegalArgumentException("The following required property is missing from the provided .properties file (or has an invalid format): '" + property + "'")
-    else
-      logger.log(Level.WARNING, "The following property is missing from the provided .properties file (or has an invalid format): '" + property + "'. It will not factor in.")
+  def getArbitraryStringProperty(key: String, required: Boolean = true): String = {
+    getArbitraryStringProperty(key) match{
+      case Some(s) => s
+      case None if required => throwMissingPropertyException(key)
+      case _ => null
+    }
   }
+
+  def throwMissingPropertyException(property: String) =
+      throw new IllegalArgumentException("The following required property is missing from the provided .properties file (or has an invalid format): '" + property + "'")
 
   /**
     * get all universal properties, check if there is an override in the provided config file
@@ -55,6 +54,11 @@ class Config(val configPath: String) extends
   lazy val wikiName: String = getString(this, "wiki-name", required = true).trim
 
   lazy val copyrightCheck: Boolean = Try(this.getProperty("copyrightCheck", "false").toBoolean).getOrElse(false)
+
+  /**
+    * The name of the properties file loaded
+    */
+  val propertiesFilename: String = getString(this, ConfigUtils.propertiesFileKey, required = true)
 
   /**
    * Dump directory
@@ -96,7 +100,7 @@ class Config(val configPath: String) extends
     case None => None
   }
 
-  def getDefaultExtractionRecorder[T](lang: Language, interval: Int = 100000, preamble: String = null, writer: Writer = null, datasets : ListBuffer[Dataset] = null, monitor : ExtractionMonitor = null): ExtractionRecorder[T] ={
+  def getDefaultExtractionRecorder[T](lang: Language, interval: Int = 100000, preamble: String = null, writer: Writer = null, datasets : List[Dataset] = List(), monitor : ExtractionMonitor = null): ExtractionRecorder[T] ={
     val w = if(writer != null) writer
       else openLogFile(lang.wikiCode) match{
         case Some(s) => new OutputStreamWriter(s)
@@ -108,9 +112,7 @@ class Config(val configPath: String) extends
   private def openLogFile(langWikiCode: String): Option[FileOutputStream] ={
     logDir match{
       case Some(p) if p.exists() =>
-        var logname = configPath.replace("\\", "/")
-        logname = logname.substring(logname.lastIndexOf("/") + 1)
-        logname = logname + "_" + langWikiCode + ".log"
+        val logname = propertiesFilename + "_" + langWikiCode + ".log"
         val logFile = new File(p, logname)
         logFile.createNewFile()
         Option(new FileOutputStream(logFile))
@@ -202,7 +204,7 @@ class Config(val configPath: String) extends
     if(requireComplete){
       val finder = new Finder[File](dumpDir, lang, wikiName)
       val date = finder.dates(source.head).last
-      finder.file(date, Config.Complete) match {
+      finder.file(date, Config.DownloadComplete) match {
         case None => false
         case Some(x) => x.exists()
       }
@@ -279,7 +281,9 @@ class Config(val configPath: String) extends
 object Config{
 
   /** name of marker file in wiki date directory */
-  val Complete = "download-complete"
+  val DownloadComplete = "download-complete"
+  val ExtractionStarted = "extraction-started"
+  val ExtractionComplete = "extraction-complete"
 
   case class NifParameters(
     nifQuery: String,
@@ -314,15 +318,18 @@ object Config{
      exceptionThreshold: Int
    )
 
-  private val universalProperties: Properties = loadConfig(this.getClass.getClassLoader.getResource("universal.properties")).asInstanceOf[Properties]
+  private val universalProperties: Properties = loadConfig(this.getClass.getClassLoader.getResource("universal.properties"))
 
-  val universalConfig: Config = new Config(null)
-
-
+  val universalConfig: Config = new Config(universalProperties)
   /**
     * The content of the wikipedias.csv in the base-dir (needs to be static)
     */
   private val wikisinfoFile = new File(getString(universalProperties , "base-dir", required = true), WikiInfo.FileName)
   private lazy val wikiinfo = if(wikisinfoFile.exists()) WikiInfo.fromFile(wikisinfoFile, Codec.UTF8) else Seq()
   def wikiInfos: Seq[WikiInfo] = wikiinfo
+
+  def combineProperties(props1: Properties, props2: Properties): Properties ={
+    props1.putAll(props2)
+    props1
+  }
 }

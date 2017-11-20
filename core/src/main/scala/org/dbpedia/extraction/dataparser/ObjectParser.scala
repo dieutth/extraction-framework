@@ -1,21 +1,26 @@
 package org.dbpedia.extraction.dataparser
 
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
 import org.dbpedia.extraction.wikiparser._
 import org.dbpedia.extraction.util.Language
+
 import scala.Predef._
 import org.dbpedia.extraction.wikiparser.PropertyNode
 import org.dbpedia.extraction.wikiparser.TextNode
 import org.dbpedia.extraction.wikiparser.TemplateNode
 import org.dbpedia.extraction.wikiparser.InternalLinkNode
+
 import scala.Some
 import org.dbpedia.extraction.config.dataparser.DataParserConfig
+
 import scala.language.reflectiveCalls
 
 /**
  * Parses links to other instances.
  */
 
-class ObjectParser( context : { def language : Language }, val strict : Boolean = false) extends DataParser
+@SoftwareAgentAnnotation(classOf[ObjectParser], AnnotationType.Parser)
+class ObjectParser( context : { def language : Language }, val strict : Boolean = false) extends DataParser[String]
 {
     private val flagTemplateParser = new FlagTemplateParser(context)
 
@@ -25,19 +30,19 @@ class ObjectParser( context : { def language : Language }, val strict : Boolean 
                                           else DataParserConfig.splitPropertyNodeRegexObject("en")
     // the Template {{·}} would also be nice, but is not that easy as the regex splits
 
-    override def parsePropertyNode( propertyNode : PropertyNode, split : Boolean, transformCmd : String = null, transformFunc : String => String = identity ): List[ParseResult[String]] =
+    override def parsePropertyNode( propertyNode : PropertyNode, split : Boolean, transformCmd : String = null, transformFunc : String => String = identity ): List[ParseResult[_]] =
     {
         if(split)
         {
-            NodeUtil.splitPropertyNode(propertyNode, splitPropertyNodeRegex, trimResults = true, transformCmd = transformCmd, transformFunc = transformFunc).flatMap( node => parse(node).toList )
+            NodeUtil.splitPropertyNode(propertyNode, splitPropertyNodeRegex, trimResults = true, transformCmd = transformCmd, transformFunc = transformFunc).flatMap( node => super.parseWithProvenance(node).toList )
         }
         else
         {
-            parse(propertyNode).toList
+            super.parseWithProvenance(propertyNode).toList
         }
     }
 
-    override def parse(node : Node) : Option[ParseResult[String]] =
+    private[dataparser] override def parse(node : Node) : Option[ParseResult[String]] =
     {
         val pageNode = node.root
 

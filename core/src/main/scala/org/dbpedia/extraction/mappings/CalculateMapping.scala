@@ -1,5 +1,6 @@
 package org.dbpedia.extraction.mappings
 
+import org.dbpedia.extraction.annotations.{AnnotationType, SoftwareAgentAnnotation}
 import org.dbpedia.extraction.config.provenance.DBpediaDatasets
 import org.dbpedia.extraction.dataparser._
 import org.dbpedia.extraction.ontology.datatypes.{Datatype, _}
@@ -11,6 +12,7 @@ import org.dbpedia.extraction.wikiparser.TemplateNode
 import scala.collection.mutable.ArrayBuffer
 import scala.language.reflectiveCalls
 
+@SoftwareAgentAnnotation(classOf[CalculateMapping], AnnotationType.Extractor)
 class CalculateMapping (
   val templateProperty1 : String,
   val templateProperty2 : String,
@@ -28,17 +30,17 @@ extends PropertyMapping
 {
   require(operation == "add", "Operation '" + operation + "' is not supported. Supported operations: 'add'")
 
-  def parser(unit: Datatype): DataParser = ontologyProperty.range match
+  def parser(unit: Datatype): DataParser[_] = ontologyProperty.range match
   {
       case dt : UnitDatatype => new UnitValueParser(context, unit)
       case dt : DimensionDatatype => new UnitValueParser(context, unit)
       case dt : Datatype => dt.name match
       {
           case "xsd:integer" => new IntegerParser(context)
-          case "xsd:positiveInteger"    => new IntegerParser(context, validRange = (i => i > 0))
-          case "xsd:nonNegativeInteger" => new IntegerParser(context, validRange = (i => i >=0))
-          case "xsd:nonPositiveInteger" => new IntegerParser(context, validRange = (i => i <=0))
-          case "xsd:negativeInteger"    => new IntegerParser(context, validRange = (i => i < 0))
+          case "xsd:positiveInteger"    => new IntegerParser(context, validRange = i => i > 0)
+          case "xsd:nonNegativeInteger" => new IntegerParser(context, validRange = i => i >= 0)
+          case "xsd:nonPositiveInteger" => new IntegerParser(context, validRange = i => i <= 0)
+          case "xsd:negativeInteger"    => new IntegerParser(context, validRange = i => i < 0)
           case "xsd:double" => new DoubleParser(context)
           case "xsd:float" => new DoubleParser(context)
           case name => throw new IllegalArgumentException("Datatype " + name + " is not supported by CalculateMapping")
@@ -58,54 +60,49 @@ extends PropertyMapping
 
   def extract(node : TemplateNode, subjectUri : String) : Seq[Quad] =
   {
-      for( property1 <- node.property(templateProperty1);
-           property2 <- node.property(templateProperty2);
-           parseResult1 <- parser1.parse(property1);
-           parseResult2 <- parser2.parse(property2) )
-      {
-          val quad = (parseResult1, parseResult2) match
-          {
-              //UnitValueParser
-              case(val1: ParseResult[Double], val2: ParseResult[Double]) if val1.unit.nonEmpty && val2.unit.nonEmpty =>
-              {
-                val value1 = val1.unit.get match{
-                  case u : UnitDatatype => u.toStandardUnit(val1.value)
-                  case d : Datatype => val1.value
-                }
-                val value2 = val2.unit.get match{
-                  case u : UnitDatatype => u.toStandardUnit(val2.value)
-                  case d : Datatype => val2.value
-                }
-                  val value = operation match
-                  {
-                      case "add" => value1 + value2
-                  }
-                  return writeUnitValue(value, val1.unit.get, subjectUri, node.sourceIri)
-              }
-              //DoubleParser
-              case (val1: ParseResult[Double], val2: ParseResult[Double]) =>
-              {
-                  val value = operation match
-                  {
-                      case "add" => (val1.value + val2.value).toString
-                  }
-                  staticType(subjectUri, value, node.sourceIri)
-              }
-              //IntegerParser
-              case (val1: ParseResult[Double], val2: ParseResult[Double]) =>
-              {
-                  val value = operation match
-                  {
-                      case "add" => (val1.value + val2.value).toString
-                  }
-                  staticType(subjectUri, value, node.sourceIri)
-              }
-          }
+    for( property1 <- node.property(templateProperty1);
+         property2 <- node.property(templateProperty2);
+         parseResult1 <- parser1.parseWithProvenance(property1);
+         parseResult2 <- parser2.parseWithProvenance(property2) )
+    {
 
-          return Seq(quad)
+      val quad = (parseResult1, parseResult2) match
+      {
+          //UnitValueParser
+        case (ParseResult(val1: Double, _, u1, _),ParseResult(val2: Double, _, u2, _))  if u1.nonEmpty && u2.nonEmpty =>
+            val value1 = u1.get match{
+              case u : UnitDatatype => u.toStandardUnit(val1)
+              case d : Datatype => val1
+            }
+            val value2 = u2.get match{
+              case u : UnitDatatype => u.toStandardUnit(val2)
+              case d : Datatype => val2
+            }
+            val value = operation match
+            {
+                case "add" => value1 + value2
+            }
+            return writeUnitValue(value, u1.get, subjectUri, node.sourceIri)
+          //DoubleParser
+        case (ParseResult(val1: Double, _, _, _),ParseResult(val2: Double, _, _, _)) =>
+          val value = operation match
+          {
+              case "add" => (val1 + val2).toString
+          }
+          staticType(subjectUri, value, node.sourceIri)
+          //IntegerParser
+        case (ParseResult(val1: Int, _, _, _),ParseResult(val2: Int, _, _, _)) =>
+          val value = operation match
+          {
+              case "add" => (val1 + val2).toString
+          }
+          staticType(subjectUri, value, node.sourceIri)
       }
-      
-      Seq.empty
+
+        return Seq(quad)
+    }
+
+    Seq.empty
   }
 
   //TODO duplicated from SimplePropertyMapping
